@@ -77,3 +77,76 @@ vagrant ssh slave -c "sudo mkdir -m 777 -p /mnt/altschool/slave"
 
 #move content to slave from master
 vagrant ssh master -c "sudo -u altschool scp -o StrictHostKeyChecking=no -r /mnt/altschool/* slave:/mnt/altschool/slave"
+
+#print running process for both nodes
+echo -e "\nMaster Node Running Processes\n===================="
+vagrant ssh master -c 'sudo -u altschool ps' 
+
+echo -e "\nSlave Node Running Processes (captured from master node)\n====================="
+vagrant ssh master -c 'sudo -u altschool ssh slave ps'
+
+#lamp stack deployment
+cat <<EOL > ampinstall.sh
+#!/bin/bash
+#update packagge list
+sudo apt-get update
+
+#install apache server
+sudo apt-get install apache2 -y
+
+#enable apache to start on boot
+sudo systemctl enable apache2
+
+#start apache
+sudo systemctl start apache2
+
+#install mysql server
+sudo apt-get install mysql-server -y
+
+#secure mysql installation
+sudo mysql_secure_installation <<EOF
+
+n
+y
+y
+y
+y
+EOF
+
+sudo mysql -u root -p"root" <<MYSQL_SCRIPT
+CREATE DATABASE newdb;
+CREATE USER 'segun'@'localhost' IDENTIFIED BY 'adeleke';
+GRANT ALL PRIVILEGES ON newdb.* TO 'segun'@'localhost';
+FLUSH PRIVILEGES;
+MYSQL_SCRIPT
+
+#install php
+sudo apt-get install php libapache2-mod-php php-mysql -y
+
+#create a test php file
+echo "<?php phpinfo(); ?>" | sudo tee /var/www/html/info.php
+
+#restart apache to apply changes
+sudo systemctl restart apache2
+EOL
+
+#give altschool dir all access
+vagrant ssh master -c "sudo chmod ugo+w /home/altschool"
+
+#run script on master and slave node
+cat ampinstall.sh | vagrant ssh master -c 'sudo -u altschool sudo cat > /home/altschool/ampinstall.sh && sudo -u altschool sudo chmod 777 /home/altschool/ampinstall.sh'
+vagrant ssh master -c 'sudo -u altschool scp /home/altschool/ampinstall.sh slave:~/'
+
+vagrant ssh slave -c "sudo chmod 777 ~/ampinstall.sh"
+
+#remove access
+vagrant ssh master -c "sudo chmod go-w /home/altschool"
+
+#remove file
+rm -rf ampinstall.sh
+
+vagrant ssh master -c "sudo -u altschool /home/altschool/ampinstall.sh"
+
+vagrant ssh slave -c "~/ampinstall.sh"
+
+echo -e "======================================================\n\n\nThe End\n\n\n================================================="

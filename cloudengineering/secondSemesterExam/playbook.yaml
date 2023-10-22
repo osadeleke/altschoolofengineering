@@ -1,0 +1,15 @@
+---
+- name: Execute Script on Slave
+  hosts: slave
+  become: yes  # This allows running commands with elevated privileges
+
+  tasks:
+    - name: Copy the Bash script to the slave machine
+      copy:
+        src: script.sh  # Replace with the actual path to your script
+        dest: ~/script.sh  # Replace with the desired path on the slave
+      register: script_copy_result
+
+    - name: Execute the Bash script on the slave machine
+      command: bash ~/script.sh
+      when: script_copy_result.changed  # Only execute if the script was copied
